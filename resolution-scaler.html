@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Max-8000 Resolution Scaler</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    max-width: 480px;
+    margin: 60px auto;
+    padding: 0 20px;
+    background: #f7f7f8;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  p.sub { color: #666; margin-top: 0; font-size: 0.9rem; }
+  .field { margin-bottom: 14px; }
+  label { display: block; font-size: 0.85rem; margin-bottom: 4px; font-weight: 600; }
+  input {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  button:hover { background: #333; }
+  #result {
+    margin-top: 20px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    display: none;
+  }
+  #result .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.95rem; }
+  #result .row span:first-child { color: #666; }
+  #result .big { font-weight: 700; font-size: 1.1rem; }
+  #error { color: #c0392b; font-size: 0.85rem; margin-top: 8px; display: none; }
+  .valwrap { display: flex; align-items: center; gap: 8px; }
+  .copy-btn {
+    width: auto;
+    margin-top: 0;
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    background: #eee;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  .copy-btn:hover { background: #ddd; }
+  .copy-btn.copied { background: #d4edda; color: #1e7e34; border-color: #c3e6cb; }
+</style>
+</head>
+<body>
+
+<h1>Resolution Scaler — Max 8000</h1>
+<p class="sub">Enter a width and height. It scales the image up or down so the largest side gets as close to 8000px as possible without hitting it, keeping the aspect ratio.</p>
+
+<div class="field">
+  <label for="w">Width (px)</label>
+  <input type="number" id="w" min="1" placeholder="e.g. 1920">
+</div>
+<div class="field">
+  <label for="h">Height (px)</label>
+  <input type="number" id="h" min="1" placeholder="e.g. 1080">
+</div>
+
+<button onclick="calculate()">Calculate</button>
+
+<div id="error"></div>
+
+<div id="result">
+  <div class="row">
+    <span>New width</span>
+    <span class="valwrap">
+      <span class="big" id="outW"></span>
+      <button class="copy-btn" onclick="copyValue('outW', this)">Copy</button>
+    </span>
+  </div>
+  <div class="row">
+    <span>New height</span>
+    <span class="valwrap">
+      <span class="big" id="outH"></span>
+      <button class="copy-btn" onclick="copyValue('outH', this)">Copy</button>
+    </span>
+  </div>
+  <div class="row"><span>Scale factor</span><span id="outScale"></span></div>
+  <div class="row"><span>Aspect ratio</span><span id="outRatio"></span></div>
+</div>
+
+<script>
+  // Target just under 8000 so the largest dimension gets as close as possible
+  // without ever reaching or exceeding it.
+  const LIMIT = 8000;
+  const TARGET = LIMIT - 0.0001;
+
+  function calculate() {
+    const wInput = document.getElementById('w');
+    const hInput = document.getElementById('h');
+    const errorBox = document.getElementById('error');
+    const resultBox = document.getElementById('result');
+
+    const w = parseFloat(wInput.value);
+    const h = parseFloat(hInput.value);
+
+    if (!w || !h || w <= 0 || h <= 0) {
+      errorBox.textContent = 'Please enter valid positive numbers for both width and height.';
+      errorBox.style.display = 'block';
+      resultBox.style.display = 'none';
+      return;
+    }
+
+    errorBox.style.display = 'none';
+
+    const maxDim = Math.max(w, h);
+    const scale = TARGET / maxDim;
+
+    let newW = Math.floor(w * scale);
+    let newH = Math.floor(h * scale);
+
+    // Safety net: ensure neither dimension ever reaches the limit
+    if (newW >= LIMIT) newW = LIMIT - 1;
+    if (newH >= LIMIT) newH = LIMIT - 1;
+
+    const outWEl = document.getElementById('outW');
+    const outHEl = document.getElementById('outH');
+
+    outWEl.textContent = newW.toLocaleString();
+    outWEl.dataset.raw = newW;
+    outHEl.textContent = newH.toLocaleString();
+    outHEl.dataset.raw = newH;
+
+    document.getElementById('outScale').textContent = scale.toFixed(6) + '×';
+    document.getElementById('outRatio').textContent = (w / h).toFixed(4) + ' : 1';
+
+    resultBox.style.display = 'block';
+  }
+
+  function copyValue(elId, btn) {
+    const el = document.getElementById(elId);
+    const value = el.dataset.raw || el.textContent;
+
+    const done = () => {
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1200);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(done).catch(() => fallbackCopy(value, done));
+    } else {
+      fallbackCopy(value, done);
+    }
+  }
+
+  function fallbackCopy(text, done) {
+    const temp = document.createElement('textarea');
+    temp.value = text;
+    temp.style.position = 'fixed';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+    temp.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(temp);
+    done();
+  }
+
+  // Allow pressing Enter in either field to trigger calculation
+  document.getElementById('w').addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+  document.getElementById('h').addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+</script>
+
+</body>
+</html>
